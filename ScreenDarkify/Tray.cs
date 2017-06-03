@@ -1,10 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 using System.Windows.Forms;
+using IniParser;
+using IniParser.Model;
 using ScreenDarkify.Properties;
 using static Gamma;
 
@@ -12,7 +10,9 @@ namespace ScreenDarkify
 {
     public class Tray : ApplicationContext
     {
-        private NotifyIcon trayIcon;
+        NotifyIcon trayIcon;
+        int gamma = 128;
+        bool SaveOnExit = true;
 
         public Tray()
         {
@@ -33,19 +33,59 @@ namespace ScreenDarkify
             trayIcon.ContextMenuStrip.Items.Add(new ToolStripMenuItem("Exit", Resources.close, Exit));
 
             Application.ApplicationExit += OnApplicationExit;
+
+            LoadSettings();
+        }
+
+        void LoadSettings()
+        {
+            if (!File.Exists("Config.ini"))
+            {
+                SaveSettings();
+                return;
+            }
+
+            var parser = new FileIniDataParser();
+            var data = new IniData();
+
+            data = parser.ReadFile("Config.ini");
+            if (!int.TryParse(data["Config"]["Brightness"], out gamma))
+            {
+                MessageBox.Show("Incorrect Brightness value in config!\nResetting config.", "Could not load config",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                gamma = 128;
+                File.Delete("Config.ini");
+                SaveSettings();
+                return;
+            }
+            if (!bool.TryParse(data["Config"]["SaveOnExit"], out SaveOnExit))
+            {
+                MessageBox.Show("Incorrect SaveOnExit value in config!\nResetting config.", "Could not load config",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SaveOnExit = true;
+                File.Delete("Config.ini");
+                SaveSettings();
+                return;
+            }
+            SetGamma(gamma);
+        }
+
+        void SaveSettings()
+        {
+            var parser = new FileIniDataParser();
+            var data = new IniData();
+            data["Config"]["Brightness"] = gamma.ToString();
+            data["Config"]["SaveOnExit"] = SaveOnExit.ToString();
+            parser.WriteFile("Config.ini", data);
         }
 
         void Exit(object sender, EventArgs e)
         {
-            trayIcon.Visible = false;
-            SetGamma(128);
-
             Application.Exit();
         }
 
         void ChangeGamma(object sender, EventArgs e)
         {
-            var gamma = 128;
             switch (((ToolStripMenuItem)sender).Text)
             {
                 case "100%":
@@ -70,6 +110,9 @@ namespace ScreenDarkify
 
         void OnApplicationExit(object sender, EventArgs e)
         {
+            if (SaveOnExit)
+                SaveSettings();
+
             trayIcon.Visible = false;
             SetGamma(128);
         }
